@@ -6,6 +6,93 @@ import (
 	"testing"
 )
 
+func Test_setValue(t *testing.T) {
+	cases := map[string]struct {
+		to   interface{}
+		dst  reflect.Value
+		want interface{}
+		err  error
+	}{
+		"ErrSetInvalidType": {
+			dst:  reflect.ValueOf(map[string]string{}),
+			err:  ErrSetInvalidType,
+			want: map[string]string{},
+		},
+		"Ptr": {
+			dst: func() reflect.Value {
+				var v struct{}
+
+				return reflect.ValueOf(&v)
+			}(),
+			err:  ErrSetInvalidType,
+			want: &struct{}{},
+		},
+		"String": {
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			to:   "foo",
+			want: "foo",
+		},
+		"Int": {
+			dst: func() reflect.Value {
+				var v int
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			to:   123,
+			want: 123,
+		},
+		"Uint": {
+			dst: func() reflect.Value {
+				var v uint
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			to:   uint(123),
+			want: uint(123),
+		},
+		"Float": {
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			to:   float64(123.45),
+			want: float64(123.45),
+		},
+		"Slice": {
+			dst: func() reflect.Value {
+				var v []string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			to:   []string{"foo", "bar"},
+			want: []string{"foo", "bar"},
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := setValue(tc.dst, tc.to)
+
+			if !errors.Is(err, tc.err) {
+				t.Errorf("want %+v err, got %+v", err, tc.err)
+			}
+
+			if !reflect.DeepEqual(tc.want, tc.dst.Interface()) {
+				t.Errorf("want %+v value, got %+v", tc.want, tc.dst.Interface())
+			}
+		})
+	}
+}
+
 type TestStringer struct {
 	Value string
 }
