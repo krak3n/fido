@@ -102,35 +102,81 @@ func Test_setValueToString(t *testing.T) {
 func Test_setValueToInt(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}
+		dst  reflect.Value
 		want int64
 		err  error
 	}{
 		"InvalidType": {
-			to:  []string{"foo"},
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			err: ErrSetInvalidType,
 		},
+		"Overflow": {
+			to: int64(1 << 31),
+			dst: func() reflect.Value {
+				var v int32
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err:  ErrSetOverflow,
+			want: 0,
+		},
 		"String": {
-			to:   "1",
+			to: "1",
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 1,
 		},
 		"Int": {
-			to:   int(1),
+			to: int(1),
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 1,
 		},
 		"Int8": {
-			to:   int8(8),
+			to: int8(8),
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 8,
 		},
 		"Int16": {
-			to:   int16(16),
+			to: int16(16),
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 16,
 		},
 		"Int32": {
-			to:   int32(32),
+			to: int32(32),
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 32,
 		},
 		"Int64": {
-			to:   int64(64),
+			to: int64(64),
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 64,
 		},
 	}
@@ -141,16 +187,14 @@ func Test_setValueToInt(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var i int64
-
-			err := setValueToInt(reflect.ValueOf(&i).Elem(), tc.to)
+			err := setValueToInt(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v err, got %+v", err, tc.err)
 			}
 
-			if !reflect.DeepEqual(tc.want, i) {
-				t.Errorf("want %+v value, got %+v", tc.want, i)
+			if !reflect.DeepEqual(tc.want, tc.dst.Int()) {
+				t.Errorf("want %+v int64, got %+v", tc.want, tc.dst.Int())
 			}
 		})
 	}
@@ -159,34 +203,80 @@ func Test_setValueToInt(t *testing.T) {
 func Test_setValueToUint(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}
+		dst  reflect.Value
 		want uint64
 		err  error
 	}{
 		"InvalidType": {
-			to:  []string{"foo"},
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			err: ErrSetInvalidType,
 		},
+		"Overflow": {
+			to: uint64(1 << 32),
+			dst: func() reflect.Value {
+				var v uint32
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err:  ErrSetOverflow,
+			want: 0,
+		},
 		"String": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   "1",
 			want: 1,
 		},
 		"Uint": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   uint(1),
 			want: 1,
 		},
 		"Uint8": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   uint8(8),
 			want: 8,
 		},
 		"Uint16": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   uint16(16),
 			want: 16,
 		},
 		"Uint32": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   uint32(32),
 			want: 32,
 		},
 		"Uint64": {
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			to:   uint64(64),
 			want: 64,
 		},
@@ -198,16 +288,14 @@ func Test_setValueToUint(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var ui uint64
-
-			err := setValueToUint(reflect.ValueOf(&ui).Elem(), tc.to)
+			err := setValueToUint(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v err, got %+v", err, tc.err)
 			}
 
-			if !reflect.DeepEqual(tc.want, ui) {
-				t.Errorf("want %+v value, got %+v", tc.want, ui)
+			if !reflect.DeepEqual(tc.want, tc.dst.Uint()) {
+				t.Errorf("want %+v uint64, got %+v", tc.want, tc.dst.Uint())
 			}
 		})
 	}
@@ -216,23 +304,53 @@ func Test_setValueToUint(t *testing.T) {
 func Test_setValueToFloat(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}
+		dst  reflect.Value
 		want float64
 		err  error
 	}{
 		"InvalidType": {
-			to:  []string{"foo"},
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			err: ErrSetInvalidType,
 		},
+		"Overflow": {
+			to: float64((1<<24-1)<<(127-23) + 1<<(127-52)),
+			dst: func() reflect.Value {
+				var v float32
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err: ErrSetOverflow,
+		},
 		"String": {
-			to:   "4.99",
+			to: "4.99",
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 4.99,
 		},
 		"Float32": {
-			to:   float32(32),
+			to: float32(32),
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 32,
 		},
 		"Float64": {
-			to:   float64(64),
+			to: float64(64),
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: 64,
 		},
 	}
@@ -243,16 +361,14 @@ func Test_setValueToFloat(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var fl float64
-
-			err := setValueToFloat(reflect.ValueOf(&fl).Elem(), tc.to)
+			err := setValueToFloat(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v err, got %+v", err, tc.err)
 			}
 
-			if !reflect.DeepEqual(tc.want, fl) {
-				t.Errorf("want %+v value, got %+v", tc.want, fl)
+			if !reflect.DeepEqual(tc.want, tc.dst.Float()) {
+				t.Errorf("want %+v float64, got %+v", tc.want, tc.dst.Float())
 			}
 		})
 	}
