@@ -190,7 +190,7 @@ func setValueToInt(dst reflect.Value, to interface{}) error {
 	case string:
 		v, err := strconv.ParseInt(t, 10, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: could not convert %s to int64", ErrSetInvalidValue, t)
 		}
 
 		i = v
@@ -228,7 +228,7 @@ func setValueToUint(dst reflect.Value, to interface{}) error {
 	case string:
 		v, err := strconv.ParseUint(t, 10, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: could not convert %s to uint64", ErrSetInvalidValue, t)
 		}
 
 		i = v
@@ -266,7 +266,7 @@ func setValueToFloat(dst reflect.Value, to interface{}) error {
 	case string:
 		v, err := strconv.ParseFloat(t, 64)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: could not convert %s to float64", ErrSetInvalidValue, t)
 		}
 
 		fl = v

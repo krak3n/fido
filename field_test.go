@@ -3,7 +3,6 @@ package fido
 import (
 	"errors"
 	"reflect"
-	"strconv"
 	"testing"
 )
 
@@ -210,7 +209,7 @@ func Test_setValueToInt(t *testing.T) {
 
 				return reflect.ValueOf(&v).Elem()
 			}(),
-			err: strconv.ErrSyntax,
+			err: ErrSetInvalidValue,
 		},
 		"Overflow": {
 			to: int64(1 << 31),
@@ -287,7 +286,7 @@ func Test_setValueToInt(t *testing.T) {
 			err := setValueToInt(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
-				t.Errorf("want %+v err, got %+v", err, tc.err)
+				t.Errorf("want %+v err, got %+v", tc.err, err)
 			}
 
 			if !reflect.DeepEqual(tc.want, tc.dst.Int()) {
@@ -329,7 +328,7 @@ func Test_setValueToUint(t *testing.T) {
 
 				return reflect.ValueOf(&v).Elem()
 			}(),
-			err: strconv.ErrSyntax,
+			err: ErrSetInvalidValue,
 		},
 		"Overflow": {
 			to: uint64(1 << 32),
@@ -457,7 +456,7 @@ func Test_setValueToFloat(t *testing.T) {
 
 				return reflect.ValueOf(&v).Elem()
 			}(),
-			err: strconv.ErrSyntax,
+			err: ErrSetInvalidValue,
 		},
 		"String": {
 			to: "4.99",

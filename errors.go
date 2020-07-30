@@ -14,6 +14,7 @@ const (
 	ErrReflectValueNotAddressable
 	ErrReflectValueNotSetable
 	ErrSetInvalidType
+	ErrSetInvalidValue
 	ErrSetOverflow
 )
 
@@ -45,6 +46,8 @@ func (e Error) Error() string {
 		return "reflect value cannot be set"
 	case ErrSetInvalidType:
 		return "cannot set to type"
+	case ErrSetInvalidValue:
+		return "cannot set to value"
 	case ErrSetOverflow:
 		return "set overflow"
 	}
