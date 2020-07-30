@@ -37,12 +37,7 @@ func (p providers) add(provider Provider) {
 }
 
 func (p providers) priority(provider Provider) uint8 {
-	priority, ok := p[provider]
-	if !ok {
-		return uint8(0)
-	}
-
-	return priority
+	return p[provider]
 }
 
 func (p providers) exists(provider Provider) bool {

@@ -44,3 +44,43 @@ func NewTestProvider(t *testing.T) *TestProvider {
 		values: make([]TestValue, 0),
 	}
 }
+
+func Test_providers_priority(t *testing.T) {
+	provider1 := NewTestProvider(t)
+	provider2 := NewTestProvider(t)
+
+	cases := map[string]struct {
+		providers providers
+		provider  Provider
+		want      uint8
+	}{
+		"NotExistsReturns0": {
+			providers: make(providers),
+			provider:  provider1,
+			want:      uint8(0),
+		},
+		"ExistsReturnsPriority": {
+			providers: func() providers {
+				p := make(providers)
+				p.add(provider1)
+				p.add(provider2)
+
+				return p
+			}(),
+			provider: provider2,
+			want:     uint8(2),
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			priority := tc.providers.priority(tc.provider)
+
+			if tc.want != priority {
+				t.Errorf("want %+v tag, got %+v", tc.want, priority)
+			}
+		})
+	}
+}
