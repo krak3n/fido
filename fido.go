@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 )
 
@@ -230,7 +229,6 @@ func (f *Fido) initMapField(path Path, fld Field) error {
 }
 
 func (f *Fido) initMap(path Path, value reflect.Value) (reflect.Value, error) {
-	log.Println("initMap:", path)
 	// Ensure we have a map
 	if value.Kind() != reflect.Map {
 		return value, fmt.Errorf("%w for %s got %s", ErrExpectedMap, path, value)
