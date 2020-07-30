@@ -17,63 +17,143 @@ func (t TestStringer) String() string {
 func Test_setValueToString(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}
+		dst  reflect.Value
 		want string
 		err  error
 	}{
+		"NotSetable": {
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(v)
+			}(),
+			err: ErrReflectValueNotSetable,
+		},
 		"InvalidType": {
-			to:  []string{"foo"},
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			err: ErrSetInvalidType,
 		},
 		"Stringer": {
-			to:   TestStringer{"foo"},
+			to: TestStringer{"foo"},
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "foo",
 		},
 		"String": {
-			to:   "foo",
+			to: "foo",
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "foo",
 		},
 		"Bool": {
-			to:   true,
+			to: true,
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "true",
 		},
 		"Int": {
-			to:   int(1),
+			to: int(1),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "1",
 		},
 		"Int8": {
-			to:   int8(8),
+			to: int8(8),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "8",
 		},
 		"Int16": {
-			to:   int16(16),
+			to: int16(16),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "16",
 		},
 		"Int32": {
-			to:   int32(32),
+			to: int32(32),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "32",
 		},
 		"Int64": {
-			to:   int64(64),
+			to: int64(64),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "64",
 		},
 		"Uint": {
-			to:   uint(1),
+			to: uint(1),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "1",
 		},
 		"Uint8": {
-			to:   uint8(8),
+			to: uint8(8),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "8",
 		},
 		"Uint16": {
-			to:   uint16(16),
+			to: uint16(16),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "16",
 		},
 		"Uint32": {
-			to:   uint32(32),
+			to: uint32(32),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "32",
 		},
 		"Uint64": {
-			to:   uint64(64),
+			to: uint64(64),
+			dst: func() reflect.Value {
+				var v string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: "64",
 		},
 	}
@@ -84,16 +164,14 @@ func Test_setValueToString(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var str string
-
-			err := setValueToString(reflect.ValueOf(&str).Elem(), tc.to)
+			err := setValueToString(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v err, got %+v", err, tc.err)
 			}
 
-			if !reflect.DeepEqual(tc.want, str) {
-				t.Errorf("want %+v value, got %+v", tc.want, str)
+			if !reflect.DeepEqual(tc.want, tc.dst.String()) {
+				t.Errorf("want %+v value, got %+v", tc.want, tc.dst.String())
 			}
 		})
 	}
@@ -106,6 +184,15 @@ func Test_setValueToInt(t *testing.T) {
 		want int64
 		err  error
 	}{
+		"NotSetable": {
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(v)
+			}(),
+			err: ErrReflectValueNotSetable,
+		},
 		"InvalidType": {
 			to: []string{"foo"},
 			dst: func() reflect.Value {
@@ -207,6 +294,15 @@ func Test_setValueToUint(t *testing.T) {
 		want uint64
 		err  error
 	}{
+		"NotSetable": {
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(v)
+			}(),
+			err: ErrReflectValueNotSetable,
+		},
 		"InvalidType": {
 			to: []string{"foo"},
 			dst: func() reflect.Value {
@@ -308,6 +404,15 @@ func Test_setValueToFloat(t *testing.T) {
 		want float64
 		err  error
 	}{
+		"NotSetable": {
+			to: []string{"foo"},
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(v)
+			}(),
+			err: ErrReflectValueNotSetable,
+		},
 		"InvalidType": {
 			to: []string{"foo"},
 			dst: func() reflect.Value {
