@@ -6,12 +6,18 @@ import (
 	"strings"
 )
 
+// Tag holds struct field specific configuration from a struct tag.
 type Tag struct {
 	RawTag    string
 	Name      string
 	FieldName string
 }
 
+func (t Tag) String() string {
+	return fmt.Sprintf("%s: %s", t.FieldName, t.RawTag)
+}
+
+// LookupTag looks for the given struct tag on a struct field returning the decoded tag.
 func LookupTag(tag string, f reflect.StructField) (Tag, error) {
 	t := Tag{
 		FieldName: f.Name,
