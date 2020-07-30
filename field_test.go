@@ -3,6 +3,7 @@ package fido
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -202,6 +203,15 @@ func Test_setValueToInt(t *testing.T) {
 			}(),
 			err: ErrSetInvalidType,
 		},
+		"InvalidSyntax": {
+			to: "foo",
+			dst: func() reflect.Value {
+				var v int64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err: strconv.ErrSyntax,
+		},
 		"Overflow": {
 			to: int64(1 << 31),
 			dst: func() reflect.Value {
@@ -311,6 +321,15 @@ func Test_setValueToUint(t *testing.T) {
 				return reflect.ValueOf(&v).Elem()
 			}(),
 			err: ErrSetInvalidType,
+		},
+		"InvalidSyntax": {
+			to: "foo",
+			dst: func() reflect.Value {
+				var v uint64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err: strconv.ErrSyntax,
 		},
 		"Overflow": {
 			to: uint64(1 << 32),
@@ -431,6 +450,15 @@ func Test_setValueToFloat(t *testing.T) {
 			}(),
 			err: ErrSetOverflow,
 		},
+		"InvalidSyntax": {
+			to: "foo",
+			dst: func() reflect.Value {
+				var v float64
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err: strconv.ErrSyntax,
+		},
 		"String": {
 			to: "4.99",
 			dst: func() reflect.Value {
@@ -482,15 +510,44 @@ func Test_setValueToFloat(t *testing.T) {
 func Test_setValueToSlice(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}
+		dst  reflect.Value
 		want []string
 		err  error
 	}{
+		"NotSetable": {
+			to: "foo",
+			dst: func() reflect.Value {
+				var v []string
+
+				return reflect.ValueOf(v)
+			}(),
+			err: ErrReflectValueNotSetable,
+		},
 		"InvalidType": {
-			to:  "foo",
+			to: "foo",
+			dst: func() reflect.Value {
+				var v []string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
+			err: ErrSetInvalidType,
+		},
+		"InvalidValue": {
+			to: []interface{}{struct{}{}},
+			dst: func() reflect.Value {
+				var v []string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			err: ErrSetInvalidType,
 		},
 		"String": {
-			to:   []string{"foo", "bar"},
+			to: []string{"foo", "bar"},
+			dst: func() reflect.Value {
+				var v []string
+
+				return reflect.ValueOf(&v).Elem()
+			}(),
 			want: []string{"foo", "bar"},
 		},
 	}
@@ -501,16 +558,14 @@ func Test_setValueToSlice(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			var slice []string
-
-			err := setValueToSlice(reflect.ValueOf(&slice).Elem(), tc.to)
+			err := setValueToSlice(tc.dst, tc.to)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v err, got %+v", tc.err, err)
 			}
 
-			if !reflect.DeepEqual(tc.want, slice) {
-				t.Errorf("want %+v value, got %+v", tc.want, slice)
+			if !reflect.DeepEqual(tc.want, tc.dst.Interface()) {
+				t.Errorf("want %+v value, got %+v", tc.want, tc.dst.Interface())
 			}
 		})
 	}
