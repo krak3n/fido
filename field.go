@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+const pathSeparator = "."
+
 // A Field can be set to a value by a provider.
 type Field interface {
 	fmt.Stringer
@@ -25,7 +27,7 @@ func (p Path) String() string {
 }
 
 func (p Path) key() string {
-	return strings.Join(p, ".")
+	return strings.Join(p, pathSeparator)
 }
 
 func (p Path) equal(other Path) bool {

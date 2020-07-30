@@ -19,42 +19,9 @@ func TestProvider(t *testing.T) {
 		ctx    context.Context
 		values map[string]interface{}
 		want   []want
+		opts   []Option
 		err    error
 	}{
-		"ErrInvalidMapKey": {
-			ctx: context.Background(),
-			values: map[string]interface{}{
-				"foo": map[int]string{
-					0: "bar",
-				},
-			},
-			want: []want{
-				{
-					path: []string{"foo"},
-					value: map[int]string{
-						0: "bar",
-					},
-				},
-			},
-			err: ErrInvalidMapKey,
-		},
-		"ErrInvalidMapValue": {
-			ctx: context.Background(),
-			values: map[string]interface{}{
-				"foo": map[string]string{
-					"foo": "bar",
-				},
-			},
-			want: []want{
-				{
-					path: []string{"foo"},
-					value: map[string]string{
-						"foo": "bar",
-					},
-				},
-			},
-			err: ErrInvalidMapValue,
-		},
 		"ErrContextCancelled": {
 			ctx: func() context.Context {
 				ctx, cancel := context.WithCancel(context.Background())
@@ -63,9 +30,7 @@ func TestProvider(t *testing.T) {
 				return ctx
 			}(),
 			values: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"bar": "fizz",
-				},
+				"foo.bar": "fizz",
 			},
 			want: []want{},
 			err:  context.Canceled,
@@ -73,15 +38,28 @@ func TestProvider(t *testing.T) {
 		"SendsValues": {
 			ctx: context.Background(),
 			values: map[string]interface{}{
-				"foo": map[string]interface{}{
-					"bar": "fizz",
-				},
+				"foo.bar": "fizz",
 			},
 			want: []want{
 				{
 					path:  []string{"foo", "bar"},
 					value: "fizz",
 				},
+			},
+		},
+		"CustomSeparator": {
+			ctx: context.Background(),
+			values: map[string]interface{}{
+				"foo/bar": "fizz",
+			},
+			want: []want{
+				{
+					path:  []string{"foo", "bar"},
+					value: "fizz",
+				},
+			},
+			opts: []Option{
+				WithSeparator("/"),
 			},
 		},
 	}
@@ -113,7 +91,12 @@ func TestProvider(t *testing.T) {
 				return nil
 			}
 
-			err := New(tc.values).Values(tc.ctx, cb)
+			provider := New(tc.opts...)
+			for k, v := range tc.values {
+				provider.Add(k, v)
+			}
+
+			err := provider.Values(tc.ctx, cb)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v error got %+v", tc.err, err)
