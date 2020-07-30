@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+
+	"github.com/krak3n/fido"
 )
 
 // ProviderName is the name of the provider.
@@ -47,11 +49,11 @@ func (p *Provider) String() string {
 
 // Values walks the in memory values map calling the callback function passing the path and value to
 // Fido for processing.
-func (p *Provider) Values(ctx context.Context, cb func([]string, interface{})) error {
+func (p *Provider) Values(ctx context.Context, cb fido.Callback) error {
 	return p.walk(ctx, []string{}, p.values, cb)
 }
 
-func (p *Provider) walk(ctx context.Context, path []string, values map[string]interface{}, cb func([]string, interface{})) error {
+func (p *Provider) walk(ctx context.Context, path fido.Path, values map[string]interface{}, cb fido.Callback) error {
 	for k, v := range values {
 		select {
 		case <-ctx.Done():
@@ -75,7 +77,9 @@ func (p *Provider) walk(ctx context.Context, path []string, values map[string]in
 				}
 			}
 
-			cb(append(path, k), v)
+			if err := cb(append(path, k), v); err != nil {
+				return err
+			}
 		}
 	}
 

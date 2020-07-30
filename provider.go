@@ -9,7 +9,7 @@ import (
 type Provider interface {
 	fmt.Stringer
 
-	Values(ctx context.Context, callback func([]string, interface{})) error
+	Values(ctx context.Context, callback Callback) error
 }
 
 // A PathProvider as an optional extension interface that if implemented by the Provider will allow
@@ -28,4 +28,25 @@ type NotifyProvider interface {
 // allow Fido to call a close method on the Provider.
 type CloseProvider interface {
 	Close() error
+}
+
+type providers map[Provider]uint8
+
+func (p providers) add(provider Provider) {
+	p[provider] = uint8(len(p) + 1)
+}
+
+func (p providers) priority(provider Provider) uint8 {
+	priority, ok := p[provider]
+	if !ok {
+		return uint8(0)
+	}
+
+	return priority
+}
+
+func (p providers) exists(provider Provider) bool {
+	_, ok := p[provider]
+
+	return ok
 }

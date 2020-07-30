@@ -5,6 +5,8 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+
+	"github.com/krak3n/fido"
 )
 
 func TestProvider(t *testing.T) {
@@ -91,7 +93,7 @@ func TestProvider(t *testing.T) {
 			t.Parallel()
 
 			var i int
-			cb := func(p []string, v interface{}) {
+			cb := func(p fido.Path, v interface{}) error {
 				if i+1 > len(tc.want) {
 					t.Fatal("received more than expected values")
 				}
@@ -107,6 +109,8 @@ func TestProvider(t *testing.T) {
 				}
 
 				i++
+
+				return nil
 			}
 
 			err := New(tc.values).Values(tc.ctx, cb)
