@@ -118,11 +118,11 @@ func Test_setValueToInt(t *testing.T) {
 			want: 1,
 		},
 		"Int8": {
-			to:   int32(8),
+			to:   int8(8),
 			want: 8,
 		},
 		"Int16": {
-			to:   int32(16),
+			to:   int16(16),
 			want: 16,
 		},
 		"Int32": {
@@ -175,11 +175,11 @@ func Test_setValueToUint(t *testing.T) {
 			want: 1,
 		},
 		"Uint8": {
-			to:   uint32(8),
+			to:   uint8(8),
 			want: 8,
 		},
 		"Uint16": {
-			to:   uint32(16),
+			to:   uint16(16),
 			want: 16,
 		},
 		"Uint32": {
