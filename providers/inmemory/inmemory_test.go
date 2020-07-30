@@ -11,7 +11,7 @@ import (
 
 func TestProvider(t *testing.T) {
 	type want struct {
-		path  []string
+		path  fido.Path
 		value interface{}
 	}
 
