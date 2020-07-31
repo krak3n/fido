@@ -67,6 +67,46 @@ func TestFido_Options(t *testing.T) {
 	}
 }
 
+func TestFido_Fetch(t *testing.T) {
+	var err = errors.New("boom")
+
+	cases := map[string]struct {
+		provider Provider
+		err      error
+	}{
+		"ErrorPanicRecovery": {
+			provider: NewTestProviderWithFunc(t, func(ctx context.Context, cb Callback) error {
+				panic(err)
+			}),
+			err: err,
+		},
+		"NonErrorPanicRecovery": {
+			provider: NewTestProviderWithFunc(t, func(ctx context.Context, cb Callback) error {
+				panic("foo")
+			}),
+			err: NonErrPanic{Value: "foo"},
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			f := &Fido{
+				providers: make(providers),
+			}
+
+			err := f.Fetch(tc.provider)
+
+			if !errors.Is(err, tc.err) {
+				t.Errorf("want %+v, got %+v", err, tc.err)
+			}
+		})
+	}
+}
+
 func TestFido_fetch(t *testing.T) {
 	cases := map[string]struct {
 		fido     *Fido

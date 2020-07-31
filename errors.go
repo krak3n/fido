@@ -1,5 +1,7 @@
 package fido
 
+import "fmt"
+
 const (
 	ErrDestinationTypeInvalid Error = iota + 1
 	ErrDestinationNil
@@ -53,4 +55,13 @@ func (e Error) Error() string {
 	}
 
 	return "unknown error"
+}
+
+// NonErrPanic is returned if Fido recovers from a panic that was not an error.
+type NonErrPanic struct {
+	Value interface{}
+}
+
+func (e NonErrPanic) Error() string {
+	return fmt.Sprintf("%v: non error panic", e.Value)
 }

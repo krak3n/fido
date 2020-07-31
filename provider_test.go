@@ -14,6 +14,7 @@ type TestValue struct {
 type TestProvider struct {
 	t      *testing.T
 	values []TestValue
+	fn     func(context.Context, Callback) error
 }
 
 func (t *TestProvider) String() string {
@@ -21,17 +22,21 @@ func (t *TestProvider) String() string {
 }
 
 func (t *TestProvider) Values(ctx context.Context, callback Callback) error {
-	for _, v := range t.values {
-		if v.Err != nil {
-			return v.Err
+	if t.fn == nil {
+		for _, v := range t.values {
+			if v.Err != nil {
+				return v.Err
+			}
+
+			if err := callback(v.Path, v.Value); err != nil {
+				return err
+			}
 		}
 
-		if err := callback(v.Path, v.Value); err != nil {
-			return err
-		}
+		return nil
 	}
 
-	return nil
+	return t.fn(ctx, callback)
 }
 
 func (t *TestProvider) Add(path []string, value interface{}, err error) {
@@ -42,6 +47,14 @@ func NewTestProvider(t *testing.T) *TestProvider {
 	return &TestProvider{
 		t:      t,
 		values: make([]TestValue, 0),
+	}
+}
+
+func NewTestProviderWithFunc(t *testing.T, fn func(context.Context, Callback) error) *TestProvider {
+	return &TestProvider{
+		t:      t,
+		values: make([]TestValue, 0),
+		fn:     fn,
 	}
 }
 

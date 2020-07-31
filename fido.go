@@ -109,7 +109,7 @@ func (f *Fido) FetchWithContext(ctx context.Context, providers ...Provider) (err
 			case error:
 				err = fmt.Errorf("%w: recovered from panic", r)
 			default:
-				err = fmt.Errorf("%v: recovered from panic", r)
+				err = fmt.Errorf("%w: recovered from panic", NonErrPanic{Value: r})
 			}
 		}
 	}()
