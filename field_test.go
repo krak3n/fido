@@ -6,6 +6,200 @@ import (
 	"testing"
 )
 
+func TestPath_equal(t *testing.T) {
+	cases := map[string]struct {
+		a    Path
+		b    Path
+		want bool
+	}{
+		"NotSameLength": {
+			a:    Path{"foo"},
+			b:    Path{"foo", "bar"},
+			want: false,
+		},
+		"DifferentValues": {
+			a:    Path{"foo", "bar"},
+			b:    Path{"bar", "foo"},
+			want: false,
+		},
+		"Equal": {
+			a:    Path{"foo", "bar"},
+			b:    Path{"foo", "bar"},
+			want: true,
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			equal := tc.a.equal(tc.b)
+
+			if !reflect.DeepEqual(tc.want, equal) {
+				t.Errorf("want %+v, got %+v", tc.want, equal)
+			}
+		})
+	}
+}
+
+func Test_fields_get(t *testing.T) {
+	var v string
+
+	f := &field{
+		path:  Path{"foo"},
+		value: reflect.New(reflect.TypeOf(&v)).Elem(),
+	}
+
+	fields := fields{
+		f.path.key(): f,
+	}
+
+	cases := map[string]struct {
+		path Path
+		want interface{}
+		ok   bool
+	}{
+		"NotFound": {
+			path: Path{"bar"},
+			want: nil,
+			ok:   false,
+		},
+		"NotFoundEmptyPath": {
+			path: Path{},
+			want: nil,
+			ok:   false,
+		},
+		"Closest": {
+			path: Path{"foo", "bar"},
+			want: f,
+			ok:   true,
+		},
+		"Exact": {
+			path: Path{"foo"},
+			want: f,
+			ok:   true,
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			value, ok := fields.get(tc.path)
+
+			if !reflect.DeepEqual(tc.ok, ok) {
+				t.Errorf("want %+v, got %+v", tc.ok, ok)
+			}
+
+			if !reflect.DeepEqual(tc.want, value) {
+				t.Errorf("want %+v, got %+v", tc.want, value)
+			}
+		})
+	}
+}
+
+func Test_field_Set(t *testing.T) {
+	cases := map[string]struct {
+		to    interface{}
+		field *field
+		want  interface{}
+		err   error
+	}{
+		"Error": {
+			to: "foo",
+			field: &field{
+				value: reflect.New(reflect.TypeOf(0)).Elem(),
+			},
+			want: 0,
+			err:  ErrSetInvalidValue,
+		},
+		"SetsValue": {
+			to: 123,
+			field: &field{
+				value: reflect.New(reflect.TypeOf(0)).Elem(),
+			},
+			want: 123,
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := tc.field.Set(tc.to, NewTestProvider(t))
+
+			if !errors.Is(err, tc.err) {
+				t.Errorf("want %+v err, got %+v", tc.err, err)
+			}
+
+			if !reflect.DeepEqual(tc.want, tc.field.value.Interface()) {
+				t.Errorf("want %+v, got %+v", tc.want, tc.field.value.Interface())
+			}
+		})
+	}
+}
+
+func Test_mapfield_Set(t *testing.T) {
+	var dst = make(map[string]int)
+
+	cases := map[string]struct {
+		to    interface{}
+		key   string
+		field *mapfield
+		want  interface{}
+		err   error
+	}{
+		"Error": {
+			to:  "foo",
+			key: "bar",
+			field: &mapfield{
+				field: &field{
+					value: reflect.New(reflect.TypeOf(0)).Elem(),
+				},
+				dst: reflect.ValueOf(&dst).Elem(),
+				idx: reflect.ValueOf("bar"),
+			},
+			want: 0,
+			err:  ErrSetInvalidValue,
+		},
+
+		"SetsMapKeyValue": {
+			to:  123,
+			key: "foo",
+			field: &mapfield{
+				field: &field{
+					value: reflect.New(reflect.TypeOf(0)).Elem(),
+				},
+				dst: reflect.ValueOf(&dst).Elem(),
+				idx: reflect.ValueOf("foo"),
+			},
+			want: 123,
+		},
+	}
+
+	for name, testCase := range cases {
+		tc := testCase
+
+		t.Run(name, func(t *testing.T) {
+			err := tc.field.Set(tc.to, NewTestProvider(t))
+
+			if !errors.Is(err, tc.err) {
+				t.Errorf("want %+v err, got %+v", tc.err, err)
+			}
+
+			if !reflect.DeepEqual(tc.want, dst[tc.key]) {
+				t.Errorf("want %+v, got %+v", tc.want, dst[tc.key])
+			}
+		})
+	}
+}
+
 func Test_setValue(t *testing.T) {
 	cases := map[string]struct {
 		to   interface{}

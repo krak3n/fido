@@ -57,6 +57,10 @@ func (f fields) get(path Path) (Field, bool) {
 		return field, ok
 	}
 
+	if len(path) == 0 {
+		return nil, false
+	}
+
 	path = path[:(len(path) - 1)]
 	if len(path) == 0 {
 		return nil, false

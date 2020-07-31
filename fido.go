@@ -24,6 +24,15 @@ type Options struct {
 	ErrorOnMissingTag bool
 }
 
+// DefaultOptions returns the default configuration options for Fido.
+func DefaultOptions() Options {
+	return Options{
+		EnforcePriority:   true,
+		ErrorOnMissingTag: true,
+		StructTag:         DefaultStructTag,
+	}
+}
+
 // An Option configures Fido behaviour.
 type Option interface {
 	apply(*Options)
@@ -43,6 +52,23 @@ func WithStructTag(t string) Option {
 	})
 }
 
+// SetPriorityEnforcement configures provider priority enforcement. Set to false to
+// disable, true to enable enforcement.
+func SetPriorityEnforcement(enforce bool) Option {
+	return OptionFunc(func(o *Options) {
+		o.EnforcePriority = enforce
+	})
+}
+
+// SetErrorOnMissingTag configures Fido behaviour when it finds a struct field without tag, if
+// false Fido will ignore the field and carry on processing the other fields on the struct, if set
+// true a ErrStructTagNotFound will be returned.
+func SetErrorOnMissingTag(err bool) Option {
+	return OptionFunc(func(o *Options) {
+		o.ErrorOnMissingTag = err
+	})
+}
+
 // Callback is a function given to a Provider to call when it has values to give to Fido for
 // processing.
 type Callback func(path Path, value interface{}) error
@@ -59,11 +85,7 @@ func New(dst interface{}, opts ...Option) (*Fido, error) {
 	f := &Fido{
 		providers: make(providers),
 		fields:    make(fields),
-		options: Options{
-			EnforcePriority:   true,
-			ErrorOnMissingTag: true,
-			StructTag:         DefaultStructTag,
-		},
+		options:   DefaultOptions(),
 	}
 
 	for _, opt := range opts {
@@ -124,10 +146,10 @@ func (f *Fido) hydrate(p Path, v reflect.Value) error {
 		switch {
 		case !v.IsValid():
 			return ErrDestinationTypeInvalid
-		case v.IsNil():
-			return ErrDestinationNil
 		case v.Type().Kind() != reflect.Ptr:
 			return fmt.Errorf("%w: %s", ErrDestinationNotPtr, v.Type().Kind())
+		case v.Type().Kind() == reflect.Ptr && v.IsNil():
+			return ErrDestinationNil
 		case v.Elem().Kind() != reflect.Struct:
 			return fmt.Errorf("%w: %s", ErrDestinationTypeInvalid, v.Elem().Kind())
 		}
@@ -150,11 +172,11 @@ func (f *Fido) hydrate(p Path, v reflect.Value) error {
 
 		tag, err := LookupTag(f.options.StructTag, ft)
 		if err != nil {
-			if errors.Is(err, ErrStructTagNotFound) && !f.options.ErrorOnMissingTag {
-				continue
+			if errors.Is(err, ErrStructTagNotFound) && f.options.ErrorOnMissingTag {
+				return fmt.Errorf("%w: failed parse struct tag for %s", err, ft.Name)
 			}
 
-			return fmt.Errorf("%w: failed parse struct tag for %s", err, ft.Name)
+			continue
 		}
 
 		if err := f.hydrate(append(p, tag.Name), fv); err != nil {

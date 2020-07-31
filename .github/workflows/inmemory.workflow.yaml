@@ -2,9 +2,11 @@ name: providers/inmemory
 on:
   pull_request:
     paths:
+    - '*'
     - 'providers/inmemory/*'
   push:
     paths:
+    - '*'
     - 'providers/inmemory/*'
 jobs:
   test:
