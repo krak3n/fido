@@ -26,6 +26,22 @@ type Provider interface {
 	Values(ctx context.Context, callback Callback) error
 }
 
+// A CloseProvider is a an optional extension interface that if implemented by the Provider will
+// allow Fido to call a close method on the Provider.
+type CloseProvider interface {
+	Close() error
+}
+
+// A NotifyProvider is a an optional extension interface that if implemented by the Provider will
+// allow Fido watch the Provider for changes to configuration and pass those changes onto
+// Subscribers. If configured to do so Fido can also reload configuration when a notified of
+// changes.
+type NotifyProvider interface {
+	CloseProvider
+
+	Notify() (<-chan Provider, error)
+}
+
 // A ReadProvider reads values from an io.Reader.
 type ReadProvider interface {
 	fmt.Stringer
@@ -37,18 +53,6 @@ type ReadProvider interface {
 // Fido send the known key paths inferred from the destination struct tags to the provider.
 type PathProvider interface {
 	Paths(ch <-chan []string)
-}
-
-// A NotifyProvider is a an optional extension interface that if implemented by the Provider will
-// allow Fido to send notifications of changed values whilst the application is running.
-type NotifyProvider interface {
-	Notify() <-chan error
-}
-
-// A CloseProvider is a an optional extension interface that if implemented by the Provider will
-// allow Fido to call a close method on the Provider.
-type CloseProvider interface {
-	Close() error
 }
 
 // FromString constructs a new StringProvider.
@@ -101,16 +105,14 @@ func (s *BytesProvider) Values(ctx context.Context, callback Callback) error {
 
 type providers map[Provider]uint8
 
-func (p providers) add(provider Provider) {
-	p[provider] = uint8(len(p) + 1)
+func (p providers) add(items ...Provider) {
+	for _, provider := range items {
+		if _, ok := p[provider]; !ok {
+			p[provider] = uint8(len(p) + 1)
+		}
+	}
 }
 
 func (p providers) priority(provider Provider) uint8 {
 	return p[provider]
-}
-
-func (p providers) exists(provider Provider) bool {
-	_, ok := p[provider]
-
-	return ok
 }

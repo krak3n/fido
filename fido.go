@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 )
 
 // DefaultStructTag is the struct tag fido looks for to populate values from providers.
@@ -12,24 +13,34 @@ const DefaultStructTag = "fido"
 
 // Options configures Fido behaviour.
 type Options struct {
-	// Enforce provider priority when settings values, e.g provider 1 cannot set values set by
-	// provider 3. Default: true.
+	// AutoWatch sets Fido to automatically start watching providers that support the NotifyProvider
+	// optional extension interface. Default: true.
+	AutoWatch bool
+	// AutoUpdate sets Fido to automatically update configuration values when a Provider notifies
+	// Fido of a change. Default: true.
+	AutoUpdate bool
+	// EnforcePriority will ensure that providers with lower priority cannot set values set by
+	// a higher priority provider, e.g provider 1 cannot set values set by provider 3. Default: true.
 	EnforcePriority bool
-	// StructTag to look for on destination struct fields. Default: fido.
+	// StructTag is the name of the struct tag to look for on destination struct fields. Default: fido.
 	StructTag string
-	// Return an error if a provider provides a value for a field that does not exist on the
-	// destination struct. Default: false.
+	// ErrorOnFieldNotFound configures Fido to return an error if a provider provides a value for a field
+	// that does not exist on the destination struct. Default: false.
 	ErrorOnFieldNotFound bool
-	// Return an error if the fido struct tag is not found on a destination struct field. Default: true.
+	// ErrorOnMissingTag configures Fido to return an error if the Fido struct tag is not found on a
+	// destination struct field. Default: true.
 	ErrorOnMissingTag bool
 }
 
 // DefaultOptions returns the default configuration options for Fido.
 func DefaultOptions() Options {
 	return Options{
-		EnforcePriority:   true,
-		ErrorOnMissingTag: true,
-		StructTag:         DefaultStructTag,
+		AutoWatch:            true,
+		AutoUpdate:           true,
+		EnforcePriority:      true,
+		ErrorOnMissingTag:    true,
+		ErrorOnFieldNotFound: false,
+		StructTag:            DefaultStructTag,
 	}
 }
 
@@ -49,6 +60,20 @@ func (fn OptionFunc) apply(o *Options) {
 func WithStructTag(t string) Option {
 	return OptionFunc(func(o *Options) {
 		o.StructTag = t
+	})
+}
+
+// SetAutoWatch sets Fidos AutoWatch behaviour.
+func SetAutoWatch(v bool) Option {
+	return OptionFunc(func(o *Options) {
+		o.AutoWatch = v
+	})
+}
+
+// SetAutoUpdate sets Fidos AutoUpdate behaviour.
+func SetAutoUpdate(v bool) Option {
+	return OptionFunc(func(o *Options) {
+		o.AutoUpdate = v
 	})
 }
 
@@ -73,11 +98,48 @@ func SetErrorOnMissingTag(err bool) Option {
 // processing.
 type Callback func(path Path, value interface{}) error
 
+// FieldUpdate holds meta data about a change to a fields value.
+// Old and New values are not guarantee to be populated. Always check the value of Err.
+type FieldUpdate struct {
+	Path     Path        // Path to the field that has changed
+	Old      interface{} // The previous value
+	New      interface{} // The new value
+	Provider Provider    // The provider that set the value
+}
+
+// A Notification holds meta data about a change to a field.
+type Notification interface {
+	Updates() ([]*FieldUpdate, error)
+}
+
+// A FieldUpdateError satisfies the Notification interface and is published when an error occurs
+// when updating a fields value.
+type FieldUpdateError struct {
+	Err error
+}
+
+// Updates returns a nil slice of *FieldUpdate and the Error that occured.
+func (e *FieldUpdateError) Updates() ([]*FieldUpdate, error) {
+	return nil, e.Err
+}
+
+// FieldUpdates is a slice of pointers to FieldUpdate values. It implements the Notification
+// interface allowing FieldUpdates to be published to subscribers.
+type FieldUpdates []*FieldUpdate
+
+// Updates returns the slices of *FieldUpdate with no error.
+func (u FieldUpdates) Updates() ([]*FieldUpdate, error) {
+	return u, nil
+}
+
 // Fido is a extensible configuration loader.
 type Fido struct {
-	providers providers
-	fields    fields
-	options   Options
+	wg          sync.WaitGroup
+	subscribers []chan Notification
+	providers   providers
+	watching    providers
+	fields      fields
+	options     Options
 }
 
 // New constructs a new Fido.
@@ -95,40 +157,83 @@ func New(dst interface{}, opts ...Option) (*Fido, error) {
 	return f, f.hydrate([]string{}, reflect.ValueOf(dst))
 }
 
+// Add adds providers to Fido.
+func (f *Fido) Add(providers ...Provider) {
+	f.providers.add(providers...)
+}
+
 // Fetch fetches configuration values from the given providers with a background context.
 func (f *Fido) Fetch(providers ...Provider) error {
 	return f.FetchWithContext(context.Background(), providers...)
 }
 
-// FetchWithContext fetches configuration values from the given providers.
-// A named return value is used to catch and return a wrapped recover error on panic.
-func (f *Fido) FetchWithContext(ctx context.Context, providers ...Provider) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch r := r.(type) {
-			case error:
-				err = fmt.Errorf("%w: recovered from panic", r)
-			default:
-				err = fmt.Errorf("%w: recovered from panic", NonErrPanic{Value: r})
-			}
-		}
-	}()
+// FetchWithContext fetches configuration values from the given providers with the provided context.
+// If the AutoWatch option is enabled Fido will start watching providers that support the
+// NotifyProvider optional extension interface automatically. If the AutoWatch option is disabled
+// you will need to call Watch/WatchWithContext for the providers you wish Fido to watch.
+func (f *Fido) FetchWithContext(ctx context.Context, providers ...Provider) error {
+	f.Add(providers...)
 
-	for _, provider := range providers {
+	for provider := range f.providers {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
-			if err = f.fetch(ctx, provider); err != nil {
-				return
+			if f.options.AutoWatch {
+				if err := f.WatchWithContext(ctx); err != nil {
+					return err
+				}
+			}
+
+			if err := f.fetch(ctx, provider); err != nil {
+				return err
 			}
 		}
 	}
 
-	return
+	return nil
 }
 
-// Close loops over providers closing them if they implement the CloseProvider interface.
+// Watch starts watching providers that support the NotifyProvider optional extension interface.
+func (f *Fido) Watch(providers ...Provider) error {
+	return f.FetchWithContext(context.Background())
+}
+
+// WatchWithContext starts watching providers that support the NotifyProvider optional extension
+// interface with the provided context.
+func (f *Fido) WatchWithContext(ctx context.Context, providers ...Provider) error {
+	f.Add(providers...)
+
+	for provider := range f.providers {
+		if notifier, ok := provider.(NotifyProvider); ok {
+			if _, ok := f.watching[provider]; !ok {
+				ch, err := notifier.Notify()
+				if err != nil {
+					return fmt.Errorf("%w: failed to start provider %s notifier", err, provider)
+				}
+
+				f.watching.add(provider)
+				f.wg.Add(1)
+
+				go f.watch(ctx, ch)
+			}
+		}
+	}
+
+	return nil
+}
+
+// Subscribe creates a subscription to Notification's.
+func (f *Fido) Subscribe() <-chan Notification {
+	ch := make(chan Notification)
+
+	f.subscribers = append(f.subscribers, ch)
+
+	return ch
+}
+
+// Close calls the close method on any providers that implement the optional CloseProvider optional
+// extension interface. It will also close any subscriber channels that are currently open.
 func (f *Fido) Close() error {
 	for provider := range f.providers {
 		if closer, ok := provider.(CloseProvider); ok {
@@ -138,9 +243,16 @@ func (f *Fido) Close() error {
 		}
 	}
 
+	f.wg.Wait()
+
+	for _, subscriber := range f.subscribers {
+		close(subscriber)
+	}
+
 	return nil
 }
 
+// hydrate recursively populates the field map, mapping paths to struct fields.
 func (f *Fido) hydrate(p Path, v reflect.Value) error {
 	if len(p) == 0 {
 		switch {
@@ -187,19 +299,86 @@ func (f *Fido) hydrate(p Path, v reflect.Value) error {
 	return nil
 }
 
-func (f *Fido) fetch(ctx context.Context, p Provider) error {
-	if !f.providers.exists(p) {
-		f.providers.add(p)
+// publish pushes a notification to subscribers.
+func (f *Fido) publish(notification Notification) {
+	for _, ch := range f.subscribers {
+		ch <- notification
 	}
-
-	if err := p.Values(ctx, f.callback(p)); err != nil {
-		return err
-	}
-
-	return nil
 }
 
-func (f *Fido) callback(p Provider) Callback {
+// watch continiously pulls values from the given channel until the context is complete or the
+// channel is closed. If AutoUpdate is enabled fetch will be called for the Provider given on the
+// channel reloading configuration values from that Provider.
+func (f *Fido) watch(ctx context.Context, ch <-chan Provider) {
+	defer f.wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case provider, ok := <-ch:
+			if !ok {
+				return // Channel has closed
+			}
+
+			if f.options.AutoUpdate {
+				if err := f.fetch(ctx, provider); err != nil {
+					f.publish(&FieldUpdateError{
+						Err: err,
+					})
+				}
+			}
+		}
+	}
+}
+
+// fetch fetches values from the given provider. Update notifications are pumped onto an internal
+// channel and passed to publish to be sent to notification subscribers.
+// A named return value is used to catch and return a wrapped recover error on panic.
+func (f *Fido) fetch(ctx context.Context, provider Provider) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			switch r := r.(type) {
+			case error:
+				err = fmt.Errorf("%w: recovered from panic", r)
+			default:
+				err = fmt.Errorf("%w: recovered from panic", NonErrPanic{Value: r})
+			}
+		}
+	}()
+
+	var updates FieldUpdates
+
+	var (
+		updatesCh = make(chan *FieldUpdate)
+		doneCh    = make(chan struct{})
+	)
+
+	go func() {
+		defer close(doneCh)
+
+		for update := range updatesCh {
+			updates = append(updates, update)
+		}
+	}()
+
+	err = provider.Values(ctx, f.callback(provider, updatesCh))
+
+	close(updatesCh)
+
+	<-doneCh
+
+	if err == nil {
+		f.publish(updates)
+	}
+
+	return err
+}
+
+// callback returns the callback function gigven to a provider to call when it wishes to send
+// a configuration value to Fido. It finds the destination struct field by the Path given and set
+// that field to be the value of that of the one provided.
+func (f *Fido) callback(provider Provider, updates chan<- *FieldUpdate) Callback {
 	return Callback(func(path Path, value interface{}) error {
 		for {
 			field, ok := f.fields.get(path)
@@ -219,13 +398,28 @@ func (f *Fido) callback(p Provider) Callback {
 				continue
 			}
 
-			if field.Provider() != nil && f.options.EnforcePriority {
-				if f.providers[field.Provider()] > f.providers[p] {
-					return nil
+			current := field.Value().Interface()
+
+			if value != current {
+				if field.Provider() != nil && f.options.EnforcePriority {
+					if f.providers[field.Provider()] > f.providers[provider] {
+						return nil
+					}
+				}
+
+				if err := field.Set(value, provider); err != nil {
+					return fmt.Errorf("%w: failed to set field %s value %v", err, path, value)
+				}
+
+				updates <- &FieldUpdate{
+					Path:     path,
+					New:      value,
+					Old:      current,
+					Provider: provider,
 				}
 			}
 
-			return field.Set(value, p)
+			return nil
 		}
 	})
 }

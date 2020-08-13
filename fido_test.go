@@ -20,6 +20,8 @@ func TestFido_Options(t *testing.T) {
 				WithStructTag("foo"),
 			},
 			want: Options{
+				AutoUpdate:        true,
+				AutoWatch:         true,
 				StructTag:         "foo",
 				EnforcePriority:   true,
 				ErrorOnMissingTag: true,
@@ -30,6 +32,8 @@ func TestFido_Options(t *testing.T) {
 				SetPriorityEnforcement(false),
 			},
 			want: Options{
+				AutoUpdate:        true,
+				AutoWatch:         true,
 				StructTag:         DefaultStructTag,
 				EnforcePriority:   false,
 				ErrorOnMissingTag: true,
@@ -40,6 +44,8 @@ func TestFido_Options(t *testing.T) {
 				SetErrorOnMissingTag(false),
 			},
 			want: Options{
+				AutoUpdate:        true,
+				AutoWatch:         true,
 				StructTag:         DefaultStructTag,
 				EnforcePriority:   true,
 				ErrorOnMissingTag: false,
@@ -369,7 +375,14 @@ func TestFido_callback(t *testing.T) {
 				providers: tc.providers,
 			}
 
-			err := f.callback(tc.provider)(tc.path, tc.value)
+			ch := make(chan *FieldUpdate)
+			go func() {
+				for update := range ch {
+					t.Log(update)
+				}
+			}()
+
+			err := f.callback(tc.provider, ch)(tc.path, tc.value)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v, got %+v", tc.err, err)
