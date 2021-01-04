@@ -24,6 +24,9 @@ func FromFiles(provider ReadProvider, patterns ...string) *FileProvider {
 	}
 }
 
+// Ensure FileProvider implements the Provider interface.
+var _ Provider = (*FileProvider)(nil)
+
 // FileProvider provides a standard Provider that wraps a given ReadProvider.
 type FileProvider struct {
 	patterns []string
@@ -38,7 +41,7 @@ func (p *FileProvider) String() string {
 
 // Values searches for files matching the patterns provided, opening each file and passing them to
 // the given ReadProvider for processing.
-func (p *FileProvider) Values(ctx context.Context, callback Callback) error {
+func (p *FileProvider) Values(ctx context.Context, writer Writer) error {
 	for _, pattern := range p.patterns {
 		select {
 		case <-ctx.Done():
@@ -61,7 +64,7 @@ func (p *FileProvider) Values(ctx context.Context, callback Callback) error {
 
 				p.matches[path] = struct{}{}
 
-				if err := p.provider.Values(ctx, f, callback); err != nil {
+				if err := p.provider.Values(ctx, f, writer); err != nil {
 					return err
 				}
 

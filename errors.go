@@ -18,6 +18,7 @@ const (
 	ErrSetInvalidType
 	ErrSetInvalidValue
 	ErrSetOverflow
+	ErrDoesNotImplementNotifyProvider
 )
 
 type Error uint8
@@ -52,6 +53,8 @@ func (e Error) Error() string {
 		return "cannot set to value"
 	case ErrSetOverflow:
 		return "set overflow"
+	case ErrDoesNotImplementNotifyProvider:
+		return "does not implement NotifyProvider extension interface"
 	}
 
 	return "unknown error"

@@ -23,7 +23,7 @@ func JoinProviderNames(names ...string) string {
 type Provider interface {
 	fmt.Stringer
 
-	Values(ctx context.Context, callback Callback) error
+	Values(ctx context.Context, writer Writer) error
 }
 
 // A CloseProvider is a an optional extension interface that if implemented by the Provider will
@@ -39,14 +39,14 @@ type CloseProvider interface {
 type NotifyProvider interface {
 	CloseProvider
 
-	Notify() (<-chan Provider, error)
+	Notify(ctx context.Context, writer Writer) error
 }
 
 // A ReadProvider reads values from an io.Reader.
 type ReadProvider interface {
 	fmt.Stringer
 
-	Values(ctx context.Context, reader io.Reader, callback Callback) error
+	Values(ctx context.Context, reader io.Reader, writer Writer) error
 }
 
 // A PathProvider as an optional extension interface that if implemented by the Provider will allow
@@ -56,12 +56,15 @@ type PathProvider interface {
 }
 
 // FromString constructs a new StringProvider.
-func FromString(provider ReadProvider, value string) Provider {
+func FromString(provider ReadProvider, value string) *StringProvider {
 	return &StringProvider{
 		value:    value,
 		provider: provider,
 	}
 }
+
+// Ensure StringProvider implements the Provider interface.
+var _ Provider = (*StringProvider)(nil)
 
 // StringProvider wraps a ReadProvider implementing the standard Provider interface.
 type StringProvider struct {
@@ -75,17 +78,20 @@ func (s *StringProvider) String() string {
 
 // Values calls the Values function on the wrapped provider passing it the context, the string value as
 // an io.Reader and the callback function.
-func (s *StringProvider) Values(ctx context.Context, callback Callback) error {
-	return s.provider.Values(ctx, strings.NewReader(s.value), callback)
+func (s *StringProvider) Values(ctx context.Context, writer Writer) error {
+	return s.provider.Values(ctx, strings.NewReader(s.value), writer)
 }
 
 // FromBytes constructs a new BytesProvider.
-func FromBytes(provider ReadProvider, value []byte) Provider {
+func FromBytes(provider ReadProvider, value []byte) *BytesProvider {
 	return &BytesProvider{
 		value:    value,
 		provider: provider,
 	}
 }
+
+// Ensure BytesProvider implements the Provider interface.
+var _ Provider = (*BytesProvider)(nil)
 
 // BytesProvider wraps a ReadProvider implementing the standard Provider interface.
 type BytesProvider struct {
@@ -99,8 +105,8 @@ func (s *BytesProvider) String() string {
 
 // Values calls the Values function on the wrapped provider passing it the context, the string value as
 // an io.Reader and the callback function.
-func (s *BytesProvider) Values(ctx context.Context, callback Callback) error {
-	return s.provider.Values(ctx, bytes.NewReader(s.value), callback)
+func (s *BytesProvider) Values(ctx context.Context, writer Writer) error {
+	return s.provider.Values(ctx, bytes.NewReader(s.value), writer)
 }
 
 type providers map[Provider]uint8

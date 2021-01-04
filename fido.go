@@ -180,8 +180,10 @@ func (f *Fido) FetchWithContext(ctx context.Context, providers ...Provider) erro
 			return ctx.Err()
 		default:
 			if f.options.AutoWatch {
-				if err := f.WatchWithContext(ctx); err != nil {
-					return err
+				if err := f.watch(ctx, provider); err != nil {
+					if !errors.Is(err, ErrDoesNotImplementNotifyProvider) {
+						return err
+					}
 				}
 			}
 
@@ -205,18 +207,8 @@ func (f *Fido) WatchWithContext(ctx context.Context, providers ...Provider) erro
 	f.Add(providers...)
 
 	for provider := range f.providers {
-		if notifier, ok := provider.(NotifyProvider); ok {
-			if _, ok := f.watching[provider]; !ok {
-				ch, err := notifier.Notify()
-				if err != nil {
-					return fmt.Errorf("%w: failed to start provider %s notifier", err, provider)
-				}
-
-				f.watching.add(provider)
-				f.wg.Add(1)
-
-				go f.watch(ctx, ch)
-			}
+		if err := f.watch(ctx, provider); err != nil {
+			return err
 		}
 	}
 
@@ -309,44 +301,58 @@ func (f *Fido) publish(notification Notification) {
 // watch continiously pulls values from the given channel until the context is complete or the
 // channel is closed. If AutoUpdate is enabled fetch will be called for the Provider given on the
 // channel reloading configuration values from that Provider.
-func (f *Fido) watch(ctx context.Context, ch <-chan Provider) {
-	defer f.wg.Done()
+func (f *Fido) watch(ctx context.Context, provider Provider) error {
+	notifier, ok := provider.(NotifyProvider)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrDoesNotImplementNotifyProvider, provider)
+	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case provider, ok := <-ch:
-			if !ok {
-				return // Channel has closed
-			}
+	if _, ok := f.watching[provider]; ok {
+		return nil // Already watching
+	}
 
-			if f.options.AutoUpdate {
-				if err := f.fetch(ctx, provider); err != nil {
-					f.publish(&FieldUpdateError{
+	f.watching.add(provider)
+
+	// TODO: move out
+	mw := []WriterMiddleware{
+		WriterMiddleware(func(next Writer) Writer {
+			return WriterFunc(func(path Path, value interface{}) error {
+				if !f.options.AutoUpdate {
+					// Break out of the chain early, this avoids setting the value but will trigger
+					// notifications that values are different.
+					return nil
+				}
+
+				return next.Write(path, value)
+			})
+		}),
+	}
+
+	f.wg.Add(1)
+	go func() {
+		defer f.wg.Done()
+
+		// TODO: different interface...
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-notifier.Notify(ctx, nil): // TODO: interface
+				if err := f.fetch(ctx, provider, mw...); err != nil {
+					f.publish(&FieldUpdateError{ // TODO: different type?
 						Err: err,
 					})
 				}
 			}
 		}
-	}
+	}()
+
+	return nil
 }
 
 // fetch fetches values from the given provider. Update notifications are pumped onto an internal
 // channel and passed to publish to be sent to notification subscribers.
-// A named return value is used to catch and return a wrapped recover error on panic.
-func (f *Fido) fetch(ctx context.Context, provider Provider) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch r := r.(type) {
-			case error:
-				err = fmt.Errorf("%w: recovered from panic", r)
-			default:
-				err = fmt.Errorf("%w: recovered from panic", NonErrPanic{Value: r})
-			}
-		}
-	}()
-
+func (f *Fido) fetch(ctx context.Context, provider Provider, mw ...WriterMiddleware) error {
 	var updates FieldUpdates
 
 	var (
@@ -362,7 +368,13 @@ func (f *Fido) fetch(ctx context.Context, provider Provider) (err error) {
 		}
 	}()
 
-	err = provider.Values(ctx, f.callback(provider, updatesCh))
+	mw = append([]WriterMiddleware{
+		f.initMapMiddleware(),
+		f.enforcePriorityMiddleware(provider),
+		f.notificationMiddleware(provider, updatesCh),
+	}, mw...)
+
+	err := provider.Values(ctx, WrapWriter(f.writer(ctx, provider), mw...))
 
 	close(updatesCh)
 
@@ -373,55 +385,6 @@ func (f *Fido) fetch(ctx context.Context, provider Provider) (err error) {
 	}
 
 	return err
-}
-
-// callback returns the callback function gigven to a provider to call when it wishes to send
-// a configuration value to Fido. It finds the destination struct field by the Path given and set
-// that field to be the value of that of the one provided.
-func (f *Fido) callback(provider Provider, updates chan<- *FieldUpdate) Callback {
-	return Callback(func(path Path, value interface{}) error {
-		for {
-			field, ok := f.fields.get(path)
-			if !ok {
-				if f.options.ErrorOnFieldNotFound {
-					return fmt.Errorf("%w: %s", ErrFieldNotFound, field)
-				}
-
-				return nil
-			}
-
-			if !field.Path().equal(path) && field.Value().Kind() == reflect.Map {
-				if err := f.initMapField(path, field); err != nil {
-					return err
-				}
-
-				continue
-			}
-
-			current := field.Value().Interface()
-
-			if value != current {
-				if field.Provider() != nil && f.options.EnforcePriority {
-					if f.providers[field.Provider()] > f.providers[provider] {
-						return nil
-					}
-				}
-
-				if err := field.Set(value, provider); err != nil {
-					return fmt.Errorf("%w: failed to set field %s value %v", err, path, value)
-				}
-
-				updates <- &FieldUpdate{
-					Path:     path,
-					New:      value,
-					Old:      current,
-					Provider: provider,
-				}
-			}
-
-			return nil
-		}
-	})
 }
 
 func (f *Fido) initMapField(path Path, fld Field) error {

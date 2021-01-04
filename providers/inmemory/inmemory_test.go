@@ -71,7 +71,8 @@ func TestProvider(t *testing.T) {
 			t.Parallel()
 
 			var i int
-			cb := func(p fido.Path, v interface{}) error {
+
+			writer := fido.WriterFunc(func(p fido.Path, v interface{}) error {
 				if i+1 > len(tc.want) {
 					t.Fatal("received more than expected values")
 				}
@@ -89,14 +90,14 @@ func TestProvider(t *testing.T) {
 				i++
 
 				return nil
-			}
+			})
 
 			provider := New(tc.opts...)
 			for k, v := range tc.values {
 				provider.Add(k, v)
 			}
 
-			err := provider.Values(tc.ctx, cb)
+			err := provider.Values(tc.ctx, writer)
 
 			if !errors.Is(err, tc.err) {
 				t.Errorf("want %+v error got %+v", tc.err, err)

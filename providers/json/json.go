@@ -26,7 +26,7 @@ func (p *Provider) String() string {
 }
 
 // Values reads json from the given io.Reader passing the values back to Fido for processing.
-func (p *Provider) Values(ctx context.Context, reader io.Reader, callback fido.Callback) error {
+func (p *Provider) Values(ctx context.Context, reader io.Reader, writer fido.Writer) error {
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return err
@@ -38,5 +38,5 @@ func (p *Provider) Values(ctx context.Context, reader io.Reader, callback fido.C
 		return fmt.Errorf("%w: failed to unmarshal JSON: '%s'", err, string(b))
 	}
 
-	return fido.WalkMap(ctx, dst, fido.Path{}, callback)
+	return fido.WalkMap(ctx, dst, fido.Path{}, writer)
 }
