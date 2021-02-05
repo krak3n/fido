@@ -23,9 +23,9 @@ jobs:
       # Join coverage reports together
       - name: Join Coverage Reports
         run: |
-          echo "mode: atomic" > report.txt
+          echo "mode: atomic" > report.out
           for f in $(find . -name coverage.out); do
-            cat $f | grep -v "mode: atomic"  >> report.txt;
+            cat $f | grep -v "mode: atomic"  >> report.out;
           done
       # Upload coverage report to codecov
       - name: Upload Coverage Report
