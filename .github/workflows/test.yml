@@ -31,6 +31,5 @@ jobs:
       - name: Upload Coverage Report
         uses: codecov/codecov-action@v1
         with:
-          files: report.out
           fail_ci_if_error: true
-          verbose: true
+          files: report.out
