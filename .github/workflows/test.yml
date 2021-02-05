@@ -9,11 +9,28 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      # Install Go
       - name: Install Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go-version }}
+      # Checkout Code
       - name: Checkout Code
         uses: actions/checkout@v2
+      # Run the test suite
       - name: Test
-        run: find . -name go.mod -execdir go test -v ./... -cover \;
+        run: find . -name go.mod -execdir go test -v ./... -coverprofile=coverage.out -covermode=atomic \;
+      # Join coverage reports together
+      - name: Join Coverage Reports
+        run: |
+          echo "mode: atomic" > report.txt
+          for f in $(find . -name coverage.out); do
+            cat $f | grep -v "mode: atomic"  >> report.txt;
+          done
+      # Upload coverage report to codecov
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v1
+        with:
+          files: report.out
+          fail_ci_if_error: true
+          verbose: true
